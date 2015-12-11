@@ -6,6 +6,8 @@
 #include <exception>
 #include <initializer_list>
 
+#include <boost/integer.hpp>
+
 #include <boost/exception/exception.hpp>
 #include <boost/exception/errinfo_file_name.hpp>
 #include <boost/exception/diagnostic_information.hpp>
@@ -49,6 +51,20 @@ namespace {
         return print_hex_t<T>(arg);
     }
 
+    template <unsigned int N>
+    struct intfield {
+        unsigned char bytes[N];
+        using type = typename boost::uint_t<N * 8>::exact;
+        type value() const
+        {
+            const unsigned char *buf = bytes;
+            type result = type(*buf++);
+            while (buf < bytes + N)
+                result = (result << 8) | (*buf++ & 0xFF);
+            return result;
+        }
+    };
+
     struct rpmlead {
         unsigned char magic[4];
         unsigned char major, minor;
@@ -58,6 +74,21 @@ namespace {
         short osnum;
         short signature_type;
         char reserved[16];
+    };
+
+    struct rpmheader {
+        unsigned char magic[3];
+        unsigned char version;
+        unsigned char reserved[4];
+        intfield<4> num_index_entries;
+        intfield<4> data_size;
+    };
+
+    struct rpmindex {
+        intfield<4> tag;
+        intfield<4> type;
+        intfield<4> offset;
+        intfield<4> count;
     };
 
     std::array<unsigned char, 4> rpm_magic{0xED, 0xAB, 0xEE, 0xDB};
@@ -127,6 +158,22 @@ namespace {
                                lead_traits::magic_size> lead_traits::magic;
 
     using bad_lead_magic = bad_magic<lead_traits>;
+
+    struct header_traits {
+        static const constexpr char name[] = "header";
+        static const constexpr unsigned int magic_size = 3;
+        static const constexpr std::array<unsigned char, magic_size> magic{
+            0x8e, 0xad, 0xe8
+        };
+    };
+
+    const constexpr char header_traits::name[];
+    const constexpr std::array<unsigned char,
+                               header_traits::magic_size>
+                               header_traits::magic;
+
+    using bad_header_magic = bad_magic<header_traits>;
+
 }
 
 static void inspect_lead(std::istream &in)
@@ -148,6 +195,34 @@ static void inspect_lead(std::istream &in)
               << std::endl;
 }
 
+static void inspect_index_entry(std::istream &in)
+{
+    rpmindex index_entry;
+    in.read(reinterpret_cast<char *>(&index_entry), sizeof index_entry);
+    std::cout << "      tag: " << index_entry.tag.value()
+              << "\n      type: " << index_entry.type.value()
+              << "\n      offset: " << index_entry.offset.value()
+              << "\n      count: " << index_entry.count.value()
+              << std::endl;
+}
+
+static bool inspect_header(std::istream &in)
+{
+    rpmheader header;
+    in.read(reinterpret_cast<char *>(&header), sizeof header);
+    check_magic<header_traits>(header.magic);
+    std::cout << "    version: " << static_cast<unsigned int>(header.version)
+              << "\n    number of index entries: "
+              << header.num_index_entries.value()
+              << "\n    data size: " << header.data_size.value()
+              << "\n";
+    for (unsigned int i = 0; i < header.num_index_entries.value(); i++) {
+        std::cout << "    Index " << i << ":\n";
+        inspect_index_entry(in);
+    }
+    return !in.seekg(header.data_size.value(), std::istream::cur).eof();
+}
+
 static void inspect(const char *filename)
 {
     std::ifstream in;
@@ -156,6 +231,28 @@ static void inspect(const char *filename)
     std::cout << filename << ":\n";
     try {
         inspect_lead(in);
+        for (;;) {
+            std::istream::pos_type expected_off = in.tellg();
+            std::istream::pos_type actual_off = expected_off;
+            for (;;) {
+                unsigned char magic[4];
+                in.read(reinterpret_cast<char *>(magic), 4);
+                if (in.eof()) {
+                    std::cout << "  no header @" << actual_off - expected_off
+                              << ":\n";
+                    return;
+                }
+                if (std::mismatch(header_traits::magic.begin(),
+                                  header_traits::magic.end(),
+                                  magic).first == header_traits::magic.end())
+                    break;
+                actual_off += 4;
+            }
+            in.seekg(actual_off);
+            std::cout << "  header @" << actual_off - expected_off << ":\n";
+            if (!inspect_header(in))
+                break;
+        }
     } catch (boost::exception &e) {
         e << boost::errinfo_file_name(filename);
         throw;
