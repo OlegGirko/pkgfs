@@ -1,5 +1,5 @@
 find_package(Boost 1.47.0 COMPONENTS program_options REQUIRED)
-add_executable(pkgfs main.cpp)
+add_executable(pkgfs main.cpp commandpkg.cpp)
 install(TARGETS pkgfs RUNTIME DESTINATION bin)
 set_property(TARGET pkgfs PROPERTY CXX_STANDARD 11)
 target_link_libraries(pkgfs ${Boost_LIBRARIES})
