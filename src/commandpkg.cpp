@@ -1,17 +1,34 @@
+#include <string>
+#include <vector>
+
 #include "commandpkg.hpp"
 
 void CommandPkg::init_options(options_description &cmd_desc,
                               positional_options_description &cmd_pos)
 {
+    namespace po = boost::program_options;
     cmd_desc.add_options()
-    ("file", "Package file to list");
-    cmd_pos.add("file", 1);
+    ("subcommand", po::value<std::string>(), "Subcommand")
+    ("subargs", po::value<std::vector<std::string>>(), "Subcommand arguments");
+    cmd_pos.add("subcommand", 1).add("subargs", -1);
 }
 
 int CommandPkg::run(const variables_map &vm) const {
-    if (vm.count("file") == 0)
-        throw boost::program_options::required_option("file");
-    std::cerr << "Listing file " << vm["file"].as<std::string>() << "\n";
+    namespace po = boost::program_options;
+    if (vm.count("subcommand") == 0)
+        throw boost::program_options::required_option("subcommand");
+    std::cerr << "Running subcommand " << vm["subcommand"].as<std::string>();
+    std::vector<std::string> subargs =
+        vm["subargs"].as<std::vector<std::string>>();
+    subargs.erase(subargs.begin());
+    if (!subargs.empty()) {
+        std::cerr << " with args:";
+        for (auto p: subargs)
+            std::cerr << " " << p;
+        std::cerr << "\n";
+    } else {
+        std::cerr << " without args\n";
+    }
     return 0;
 }
 
