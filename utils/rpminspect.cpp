@@ -234,12 +234,11 @@ static void inspect(const char *filename)
     std::cout << filename << ":\n";
     try {
         inspect_lead(in);
-        for (;;) {
-            std::istream::pos_type pos = in.tellg();
-            std::cout << "  header @" << pos << ":\n";
-            if (!inspect_header(in))
-                break;
-        }
+        std::cout << "  signature header @" << in.tellg() << ":\n";
+        inspect_header(in);
+        std::cout << "  header @" << in.tellg() << ":\n";
+        inspect_header(in);
+        std::cout << "  archive @" << in.tellg() << "\n";
     } catch (boost::exception &e) {
         e << boost::errinfo_file_name(filename);
         throw;
