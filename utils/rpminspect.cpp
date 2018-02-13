@@ -235,7 +235,8 @@ static void inspect(const char *filename)
     try {
         inspect_lead(in);
         for (;;) {
-            std::cout << "  header:\n";
+            std::istream::pos_type pos = in.tellg();
+            std::cout << "  header @" << pos << ":\n";
             if (!inspect_header(in))
                 break;
         }
