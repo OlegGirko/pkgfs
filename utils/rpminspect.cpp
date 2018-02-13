@@ -211,17 +211,18 @@ static bool inspect_header(std::istream &in)
     rpmheader header;
     in.read(reinterpret_cast<char *>(&header), sizeof header);
     check_magic<header_traits>(header.magic);
+    unsigned int dsize = header.data_size.value();
+    unsigned int pad = dsize & 7 ? 8 - (dsize & 7) : 0;
     std::cout << "    version: " << static_cast<unsigned int>(header.version)
               << "\n    number of index entries: "
               << header.num_index_entries.value()
-              << "\n    data size: " << header.data_size.value()
+              << "\n    data size: " << dsize
+              << "\n    padding at the end: " << pad
               << "\n";
     for (unsigned int i = 0; i < header.num_index_entries.value(); i++) {
         std::cout << "    Index " << i << ":\n";
         inspect_index_entry(in);
     }
-    unsigned int dsize = header.data_size.value();
-    unsigned int pad = dsize & 7 ? 8 - (dsize & 7) : 0;
     return !in.seekg(dsize + pad, std::istream::cur).eof();
 }
 
