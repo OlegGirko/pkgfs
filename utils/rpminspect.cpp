@@ -220,7 +220,9 @@ static bool inspect_header(std::istream &in)
         std::cout << "    Index " << i << ":\n";
         inspect_index_entry(in);
     }
-    return !in.seekg(header.data_size.value(), std::istream::cur).eof();
+    unsigned int dsize = header.data_size.value();
+    unsigned int pad = dsize & 7 ? 8 - (dsize & 7) : 0;
+    return !in.seekg(dsize + pad, std::istream::cur).eof();
 }
 
 static void inspect(const char *filename)
