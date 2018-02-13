@@ -234,24 +234,7 @@ static void inspect(const char *filename)
     try {
         inspect_lead(in);
         for (;;) {
-            std::istream::pos_type expected_off = in.tellg();
-            std::istream::pos_type actual_off = expected_off;
-            for (;;) {
-                unsigned char magic[4];
-                in.read(reinterpret_cast<char *>(magic), 4);
-                if (in.eof()) {
-                    std::cout << "  no header @" << actual_off - expected_off
-                              << ":\n";
-                    return;
-                }
-                if (std::mismatch(header_traits::magic.begin(),
-                                  header_traits::magic.end(),
-                                  magic).first == header_traits::magic.end())
-                    break;
-                actual_off += 4;
-            }
-            in.seekg(actual_off);
-            std::cout << "  header @" << actual_off - expected_off << ":\n";
+            std::cout << "  header:\n";
             if (!inspect_header(in))
                 break;
         }
