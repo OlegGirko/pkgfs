@@ -6,27 +6,13 @@
 #include <exception>
 #include <initializer_list>
 
-#include <boost/integer.hpp>
-
 #include <boost/exception/exception.hpp>
 #include <boost/exception/errinfo_file_name.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 
-namespace {
+#include "intfield.hpp"
 
-    template <unsigned int N>
-    struct intfield {
-        unsigned char bytes[N];
-        using type = typename boost::uint_t<N * 8>::exact;
-        type value() const
-        {
-            const unsigned char *buf = bytes;
-            type result = type(*buf++);
-            while (buf < bytes + N)
-                result = (result << 8) | (*buf++ & 0xFF);
-            return result;
-        }
-    };
+namespace {
 
     struct rpmlead {
         unsigned char magic[4];
@@ -43,15 +29,15 @@ namespace {
         unsigned char magic[3];
         unsigned char version;
         unsigned char reserved[4];
-        intfield<4> num_index_entries;
-        intfield<4> data_size;
+        pkgfs::intfield<4> num_index_entries;
+        pkgfs::intfield<4> data_size;
     };
 
     struct rpmindex {
-        intfield<4> tag;
-        intfield<4> type;
-        intfield<4> offset;
-        intfield<4> count;
+        pkgfs::intfield<4> tag;
+        pkgfs::intfield<4> type;
+        pkgfs::intfield<4> offset;
+        pkgfs::intfield<4> count;
     };
 
     std::array<unsigned char, 4> rpm_magic{0xED, 0xAB, 0xEE, 0xDB};
