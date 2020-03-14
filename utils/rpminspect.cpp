@@ -29,15 +29,15 @@ namespace {
         unsigned char magic[3];
         unsigned char version;
         unsigned char reserved[4];
-        pkgfs::intfield<4> num_index_entries;
-        pkgfs::intfield<4> data_size;
+        pkgfs::intfield_be<4> num_index_entries;
+        pkgfs::intfield_be<4> data_size;
     };
 
     struct rpmindex {
-        pkgfs::intfield<4> tag;
-        pkgfs::intfield<4> type;
-        pkgfs::intfield<4> offset;
-        pkgfs::intfield<4> count;
+        pkgfs::intfield_be<4> tag;
+        pkgfs::intfield_be<4> type;
+        pkgfs::intfield_be<4> offset;
+        pkgfs::intfield_be<4> count;
     };
 
     std::array<unsigned char, 4> rpm_magic{0xED, 0xAB, 0xEE, 0xDB};

@@ -6,7 +6,7 @@
 namespace pkgfs {
 
     template <unsigned int N>
-    struct intfield {
+    struct intfield_be {
         unsigned char bytes[N];
         using type = typename boost::uint_t<N * 8>::exact;
         type value() const
@@ -15,6 +15,20 @@ namespace pkgfs {
             type result = type(*buf++);
             while (buf < bytes + N)
                 result = (result << 8) | (*buf++ & 0xFF);
+            return result;
+        }
+    };
+
+    template <unsigned int N>
+    struct intfield_le {
+        unsigned char bytes[N];
+        using type = typename boost::uint_t<N * 8>::exact;
+        type value() const
+        {
+            const unsigned char *buf = &bytes[N - 1];
+            type result = type(*buf++);
+            while (buf >= bytes)
+                result = (result << 8) | (*buf-- & 0xFF);
             return result;
         }
     };
