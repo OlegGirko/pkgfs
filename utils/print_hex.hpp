@@ -11,7 +11,9 @@ namespace pkgfs {
         char c_;
     public:
         print_hex_t(char c): c_(c) {}
-        friend std::ostream &operator<<(std::ostream &out, print_hex_t ph)
+        template<typename CharT, typename Traits>
+        friend std::basic_ostream<CharT, Traits> &
+        operator<<(std::basic_ostream<CharT, Traits> &out, print_hex_t ph)
         {
             static const char hexchars[] = "0123456789ABCDEF";
             return out << hexchars[((ph.c_ >> 4) & 0xf)]
@@ -27,7 +29,9 @@ namespace pkgfs {
         : begin_(reinterpret_cast<const char *>(&a))
         , end_(reinterpret_cast<const char *>(&a) + sizeof(T))
         {}
-        friend std::ostream &operator<<(std::ostream &out, print_hex_t ph)
+        template<typename CharT, typename Traits>
+        friend std::basic_ostream<CharT, Traits> &
+        operator<<(std::basic_ostream<CharT, Traits> &out, print_hex_t ph)
         {
             for(const char *p = ph.begin_; p != ph.end_; ++p)
                 if (!(out << print_hex_t<char>(*p)))
