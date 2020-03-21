@@ -123,6 +123,34 @@ namespace {
 
     using bad_header_magic = bad_magic<header_traits>;
 
+    class print_index_type {
+        boost::int_t<32>::exact type_;
+        constexpr static const char *const type_names[] = {
+            "NULL",
+            "CHAR",
+            "INT8",
+            "INT16",
+            "INT32",
+            "INT64",
+            "STRING",
+            "BIN",
+            "STRING_ARRAY",
+            "I18NSTRING"
+        };
+
+    public:
+        print_index_type(boost::uint_t<32>::exact type): type_(type) {}
+
+        friend std::ostream &operator<<(std::ostream &out, print_index_type pt)
+        {
+            return out << pt.type_ << ' '
+                       << (pt.type_ < sizeof type_names / sizeof type_names[0]
+                           ? type_names[pt.type_] : "(unknown)");
+        }
+    };
+
+    constexpr const char *const print_index_type::type_names[];
+
 }
 
 static void inspect_lead(std::istream &in)
@@ -151,7 +179,7 @@ static void inspect_index_entry(std::istream &in)
     rpmindex index_entry;
     in.read(reinterpret_cast<char *>(&index_entry), sizeof index_entry);
     std::cout << "      tag: " << index_entry.tag.value()
-              << "\n      type: " << index_entry.type.value()
+              << "\n      type: " << print_index_type(index_entry.type.value())
               << "\n      offset: " << index_entry.offset.value()
               << "\n      count: " << index_entry.count.value()
               << std::endl;
