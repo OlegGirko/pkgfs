@@ -136,7 +136,9 @@ static void inspect_lead(std::istream &in)
                                   '\0'));
     std::cout << "  major: " << static_cast<unsigned int>(lead.major)
               << "\n  minor: " << static_cast<unsigned int>(lead.minor)
-              << "\n  type: " << lead.type
+              << "\n  type: " << lead.type << ' '
+              << (lead.type == 0 ? " (binary)" :
+                  lead.type == 1 ? " (source)" : " (unknown)")
               << "\n  archnum: " << lead.archnum
               << "\n  name: " << pkgname
               << "\n  osnum: " << lead.osnum
