@@ -19,11 +19,11 @@ namespace {
     struct rpmlead {
         unsigned char magic[4];
         unsigned char major, minor;
-        short type;
-        short archnum;
+        pkgfs::intfield_be<2> type;
+        pkgfs::intfield_be<2> archnum;
         char name[66];
-        short osnum;
-        short signature_type;
+        pkgfs::intfield_be<2> osnum;
+        pkgfs::intfield_be<2> signature_type;
         char reserved[16];
     };
 
@@ -338,13 +338,13 @@ static void inspect_lead(std::istream &in)
                                   '\0'));
     std::cout << "  major: " << static_cast<unsigned int>(lead.major)
               << "\n  minor: " << static_cast<unsigned int>(lead.minor)
-              << "\n  type: " << lead.type << ' '
-              << (lead.type == 0 ? " (binary)" :
-                  lead.type == 1 ? " (source)" : " (unknown)")
-              << "\n  archnum: " << lead.archnum
+              << "\n  type: " << lead.type.value() << ' '
+              << (lead.type.value() == 0 ? " (binary)" :
+                  lead.type.value() == 1 ? " (source)" : " (unknown)")
+              << "\n  archnum: " << lead.archnum.value()
               << "\n  name: " << pkgname
-              << "\n  osnum: " << lead.osnum
-              << "\n  signature_type: " << lead.signature_type
+              << "\n  osnum: " << lead.osnum.value()
+              << "\n  signature_type: " << lead.signature_type.value()
               << std::endl;
 }
 
