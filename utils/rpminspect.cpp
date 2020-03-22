@@ -394,28 +394,15 @@ static void inspect(const char *filename)
     std::cout << filename << ":\n";
     try {
         inspect_lead(in);
-        for (;;) {
-            std::istream::pos_type expected_off = in.tellg();
-            std::istream::pos_type actual_off = expected_off;
-            for (;;) {
-                unsigned char magic[4];
-                in.read(reinterpret_cast<char *>(magic), 4);
-                if (in.eof()) {
-                    std::cout << "  no header @" << actual_off - expected_off
-                              << ":\n";
-                    return;
-                }
-                if (std::mismatch(header_traits::magic.begin(),
-                                  header_traits::magic.end(),
-                                  magic).first == header_traits::magic.end())
-                    break;
-                actual_off += 4;
-            }
-            in.seekg(actual_off);
-            std::cout << "  header @" << actual_off - expected_off << ":\n";
-            if (!inspect_header(in))
-                break;
-        }
+        std::cout << "  Signature:\n";
+        inspect_header(in);
+        // Next header is aligned to 8 bytes
+        const std::istream::pos_type pos = in.tellg();
+        const std::istream::off_type skip =
+            7 - (pos + std::istream::off_type(7)) % 8;
+        in.seekg(skip, std::istream::cur);
+        std::cout << "  Header:\n";
+        inspect_header(in);
     } catch (boost::exception &e) {
         e << boost::errinfo_file_name(filename);
         throw;
