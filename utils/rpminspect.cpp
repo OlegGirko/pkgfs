@@ -2,6 +2,7 @@
 #include <fstream>
 #include <string>
 #include <algorithm>
+#include <functional>
 #include <array>
 #include <exception>
 #include <initializer_list>
@@ -11,6 +12,7 @@
 #include <boost/exception/diagnostic_information.hpp>
 
 #include "intfield.hpp"
+#include "print_hex.hpp"
 
 namespace {
 
@@ -123,20 +125,169 @@ namespace {
 
     using bad_header_magic = bad_magic<header_traits>;
 
+    class print_char {
+        const char c_;
+
+    public:
+        print_char(char c): c_(c) {}
+
+        friend std::ostream &operator<<(std::ostream &out, print_char pc)
+        {
+            switch (pc.c_) {
+            case '\0': return out << "\\0";
+            case '\b': return out << "\\b";
+            case '\f': return out << "\\f";
+            case '\n': return out << "\\n";
+            case '\r': return out << "\\r";
+            case '\t': return out << "\\t";
+            case '\\': return out << "\\\\";
+            case '\'': return out << "\\'";
+            case '"': return out << "\\\"";
+            default:
+                if (pc.c_ >= ' ' && pc.c_ < '\177') {
+                    return out << pc.c_;
+                } else {
+                    return out << '\\'
+                               << ((pc.c_ >> 6) & 7)
+                               << ((pc.c_ >> 3) & 7)
+                               << (pc.c_ & 7);
+                }
+            }
+        }
+    };
+
+    struct index_type {
+        const char *name;
+        std::function<void(std::istream&,
+                           std::ostream&,
+                           boost::uint32_t count)> print;
+    };
+
+    const index_type index_types[] = {
+        {"NULL", [](std::istream &, std::ostream &, boost::uint32_t){}},
+        {"CHAR", [](std::istream &in,
+                    std::ostream &out,
+                    boost::uint32_t count){
+            if (count > 1) out << '{';
+            for (int i = 0; i < count; i++) {
+                char c;
+                in.get(c);
+                out << '\'' << print_char(c) << '\'';
+            }
+            if (count > 1) out << '}';
+        }},
+        {"INT8", [](std::istream &in,
+                    std::ostream &out,
+                    boost::uint32_t count){
+            if (count > 1) out << '{';
+            for (int i = 0; i < count; i++) {
+                if (i > 0) out << ", ";
+                pkgfs::intfield_be<1> n;
+                in.read(reinterpret_cast<char *>(&n), sizeof n);
+                out << static_cast<int>(n.value());
+            }
+            if (count > 1) out << '}';
+        }},
+        {"INT16", [](std::istream &in,
+                     std::ostream &out,
+                     boost::uint32_t count){
+            if (count > 1) out << '{';
+            for (int i = 0; i < count; i++) {
+                if (i > 0) out << ", ";
+                pkgfs::intfield_be<2> n;
+                in.read(reinterpret_cast<char *>(&n), sizeof n);
+                out << static_cast<boost::int_t<16>::exact>(n.value());
+            }
+            if (count > 1) out << '}';
+        }},
+        {"INT32", [](std::istream &in,
+                     std::ostream &out,
+                     boost::uint32_t count){
+            if (count > 1) out << '{';
+            for (int i = 0; i < count; i++) {
+                if (i > 0) out << ", ";
+                pkgfs::intfield_be<4> n;
+                in.read(reinterpret_cast<char *>(&n), sizeof n);
+                out << static_cast<boost::int_t<32>::exact>(n.value());
+            }
+            if (count > 1) out << '}';
+        }},
+        {"INT64", [](std::istream &in,
+                     std::ostream &out,
+                     boost::uint32_t count){
+            if (count > 1) out << '{';
+            for (int i = 0; i < count; i++) {
+                if (i > 0) out << ", ";
+                pkgfs::intfield_be<8> n;
+                in.read(reinterpret_cast<char *>(&n), sizeof n);
+                out << static_cast<boost::int_t<64>::exact>(n.value());
+            }
+            if (count > 1) out << '}';
+        }},
+        {"STRING", [](std::istream &in, std::ostream &out, boost::uint32_t){
+            out << '"';
+            for (;;) {
+                char c;
+                in.get(c);
+                if (c == '\0') break;
+                out << print_char(c);
+            }
+            out << '"';
+        }},
+        {"BIN", [](std::istream &in, std::ostream &out, boost::uint32_t count){
+            if (count == 0) return;
+            for (;;) {
+                char c;
+                in.get(c);
+                out << pkgfs::print_hex(c);
+                if (--count == 0) break;
+                out << ' ';
+            }
+        }},
+        {"STRING_ARRAY", [](std::istream &in,
+                            std::ostream &out,
+                            boost::uint32_t count){
+            if (count == 0) {
+                out << "{}";
+                return;
+            }
+            out << "{\"";
+            for (;;) {
+                char c;
+                in.get(c);
+                if (c == '\0') {
+                    if (--count == 0) break;
+                    out << "\", \"";
+                } else {
+                    out << print_char(c);
+                }
+            }
+            out << "\"}";
+        }},
+        {"I18NSTRING", [](std::istream &in,
+                          std::ostream &out,
+                          boost::uint32_t count){
+            if (count == 0) {
+                out << "{}";
+                return;
+            }
+            out << "{\"";
+            for (;;) {
+                char c;
+                in.get(c);
+                if (c == '\0') {
+                    if (--count == 0) break;
+                    out << "\", \"";
+                } else {
+                    out << print_char(c);
+                }
+            }
+            out << "\"}";
+        }}
+    };
+
     class print_index_type {
         boost::int_t<32>::exact type_;
-        constexpr static const char *const type_names[] = {
-            "NULL",
-            "CHAR",
-            "INT8",
-            "INT16",
-            "INT32",
-            "INT64",
-            "STRING",
-            "BIN",
-            "STRING_ARRAY",
-            "I18NSTRING"
-        };
 
     public:
         print_index_type(boost::uint_t<32>::exact type): type_(type) {}
@@ -144,13 +295,36 @@ namespace {
         friend std::ostream &operator<<(std::ostream &out, print_index_type pt)
         {
             return out << pt.type_ << ' '
-                       << (pt.type_ < sizeof type_names / sizeof type_names[0]
-                           ? type_names[pt.type_] : "(unknown)");
+                       << (pt.type_ < sizeof index_types / sizeof index_types[0]
+                           ? index_types[pt.type_].name : "(unknown)");
         }
     };
 
-    constexpr const char *const print_index_type::type_names[];
+    class print_index_value {
+        std::istream &in_;
+        boost::uint32_t type_;
+        std::istream::pos_type pos_;
+        boost::uint32_t count_;
 
+    public:
+        print_index_value(std::istream &in,
+                          boost::uint32_t type,
+                          std::istream::pos_type pos,
+                          boost::uint32_t count)
+        : in_(in), type_(type), pos_(pos), count_(count) {}
+
+        friend std::ostream &operator<<(std::ostream &out,
+                                        const print_index_value &pv)
+        {
+            if (pv.type_ < sizeof index_types / sizeof index_types[0]) {
+                std::istream::pos_type cur_pos = pv.in_.tellg();
+                pv.in_.seekg(pv.pos_);
+                index_types[pv.type_].print(pv.in_, out, pv.count_);
+                pv.in_.seekg(cur_pos);
+            }
+            return out;
+        }
+    };
 }
 
 static void inspect_lead(std::istream &in)
@@ -174,14 +348,21 @@ static void inspect_lead(std::istream &in)
               << std::endl;
 }
 
-static void inspect_index_entry(std::istream &in)
+static void inspect_index_entry(std::istream &in,
+                                std::istream::pos_type store_pos)
 {
     rpmindex index_entry;
     in.read(reinterpret_cast<char *>(&index_entry), sizeof index_entry);
+    const boost::uint32_t off = index_entry.offset.value();
     std::cout << "      tag: " << index_entry.tag.value()
               << "\n      type: " << print_index_type(index_entry.type.value())
-              << "\n      offset: " << index_entry.offset.value()
+              << "\n      offset: " << off
               << "\n      count: " << index_entry.count.value()
+              << "\n      value: "
+              << print_index_value(in,
+                                   index_entry.type.value(),
+                                   store_pos + std::istream::off_type(off),
+                                   index_entry.count.value())
               << std::endl;
 }
 
@@ -189,6 +370,9 @@ static bool inspect_header(std::istream &in)
 {
     rpmheader header;
     in.read(reinterpret_cast<char *>(&header), sizeof header);
+    const std::istream::off_type store_off =
+        header.num_index_entries.value() * sizeof(rpmindex);
+    const std::istream::pos_type store_pos = in.tellg() + store_off;
     check_magic<header_traits>(header.magic);
     std::cout << "    version: " << static_cast<unsigned int>(header.version)
               << "\n    number of index entries: "
@@ -197,7 +381,7 @@ static bool inspect_header(std::istream &in)
               << "\n";
     for (unsigned int i = 0; i < header.num_index_entries.value(); i++) {
         std::cout << "    Index " << i << ":\n";
-        inspect_index_entry(in);
+        inspect_index_entry(in, store_pos);
     }
     return !in.seekg(header.data_size.value(), std::istream::cur).eof();
 }
