@@ -11,7 +11,9 @@
 #include <boost/exception/errinfo_file_name.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 
-#include "intfield.hpp"
+#include <boost/integer.hpp>
+#include <boost/endian/arithmetic.hpp>
+
 #include "print_hex.hpp"
 
 namespace {
@@ -19,11 +21,11 @@ namespace {
     struct rpmlead {
         unsigned char magic[4];
         unsigned char major, minor;
-        pkgfs::intfield_be<2> type;
-        pkgfs::intfield_be<2> archnum;
+        boost::endian::big_uint16_t type;
+        boost::endian::big_uint16_t archnum;
         char name[66];
-        pkgfs::intfield_be<2> osnum;
-        pkgfs::intfield_be<2> signature_type;
+        boost::endian::big_uint16_t osnum;
+        boost::endian::big_uint16_t signature_type;
         char reserved[16];
     };
 
@@ -31,15 +33,15 @@ namespace {
         unsigned char magic[3];
         unsigned char version;
         unsigned char reserved[4];
-        pkgfs::intfield_be<4> num_index_entries;
-        pkgfs::intfield_be<4> data_size;
+        boost::endian::big_uint32_t num_index_entries;
+        boost::endian::big_uint32_t data_size;
     };
 
     struct rpmindex {
-        pkgfs::intfield_be<4> tag;
-        pkgfs::intfield_be<4> type;
-        pkgfs::intfield_be<4> offset;
-        pkgfs::intfield_be<4> count;
+        boost::endian::big_uint32_t tag;
+        boost::endian::big_uint32_t type;
+        boost::endian::big_uint32_t offset;
+        boost::endian::big_uint32_t count;
     };
 
     std::array<unsigned char, 4> rpm_magic{0xED, 0xAB, 0xEE, 0xDB};
@@ -182,7 +184,7 @@ namespace {
             if (count > 1) out << '{';
             for (int i = 0; i < count; i++) {
                 if (i > 0) out << ", ";
-                pkgfs::intfield_be<1> n;
+                boost::endian::big_int8_t n;
                 in.read(reinterpret_cast<char *>(&n), sizeof n);
                 out << static_cast<int>(n.value());
             }
@@ -194,9 +196,9 @@ namespace {
             if (count > 1) out << '{';
             for (int i = 0; i < count; i++) {
                 if (i > 0) out << ", ";
-                pkgfs::intfield_be<2> n;
+                boost::endian::big_int16_t n;
                 in.read(reinterpret_cast<char *>(&n), sizeof n);
-                out << static_cast<boost::int_t<16>::exact>(n.value());
+                out << n;
             }
             if (count > 1) out << '}';
         }},
@@ -206,9 +208,9 @@ namespace {
             if (count > 1) out << '{';
             for (int i = 0; i < count; i++) {
                 if (i > 0) out << ", ";
-                pkgfs::intfield_be<4> n;
+                boost::endian::big_int32_t n;
                 in.read(reinterpret_cast<char *>(&n), sizeof n);
-                out << static_cast<boost::int_t<32>::exact>(n.value());
+                out << n;
             }
             if (count > 1) out << '}';
         }},
@@ -218,9 +220,9 @@ namespace {
             if (count > 1) out << '{';
             for (int i = 0; i < count; i++) {
                 if (i > 0) out << ", ";
-                pkgfs::intfield_be<8> n;
+                boost::endian::big_int64_t n;
                 in.read(reinterpret_cast<char *>(&n), sizeof n);
-                out << static_cast<boost::int_t<64>::exact>(n.value());
+                out << n;
             }
             if (count > 1) out << '}';
         }},
@@ -338,13 +340,13 @@ static void inspect_lead(std::istream &in)
                                   '\0'));
     std::cout << "  major: " << static_cast<unsigned int>(lead.major)
               << "\n  minor: " << static_cast<unsigned int>(lead.minor)
-              << "\n  type: " << lead.type.value() << ' '
-              << (lead.type.value() == 0 ? " (binary)" :
-                  lead.type.value() == 1 ? " (source)" : " (unknown)")
-              << "\n  archnum: " << lead.archnum.value()
+              << "\n  type: " << lead.type << ' '
+              << (lead.type == 0 ? " (binary)" :
+                  lead.type == 1 ? " (source)" : " (unknown)")
+              << "\n  archnum: " << lead.archnum
               << "\n  name: " << pkgname
-              << "\n  osnum: " << lead.osnum.value()
-              << "\n  signature_type: " << lead.signature_type.value()
+              << "\n  osnum: " << lead.osnum
+              << "\n  signature_type: " << lead.signature_type
               << std::endl;
 }
 
@@ -353,16 +355,16 @@ static void inspect_index_entry(std::istream &in,
 {
     rpmindex index_entry;
     in.read(reinterpret_cast<char *>(&index_entry), sizeof index_entry);
-    const boost::uint32_t off = index_entry.offset.value();
-    std::cout << "      tag: " << index_entry.tag.value()
-              << "\n      type: " << print_index_type(index_entry.type.value())
+    const boost::uint32_t off = index_entry.offset;
+    std::cout << "      tag: " << index_entry.tag
+              << "\n      type: " << print_index_type(index_entry.type)
               << "\n      offset: " << off
-              << "\n      count: " << index_entry.count.value()
+              << "\n      count: " << index_entry.count
               << "\n      value: "
               << print_index_value(in,
-                                   index_entry.type.value(),
+                                   index_entry.type,
                                    store_pos + std::istream::off_type(off),
-                                   index_entry.count.value())
+                                   index_entry.count)
               << std::endl;
 }
 
@@ -371,19 +373,18 @@ static bool inspect_header(std::istream &in)
     rpmheader header;
     in.read(reinterpret_cast<char *>(&header), sizeof header);
     const std::istream::off_type store_off =
-        header.num_index_entries.value() * sizeof(rpmindex);
+        header.num_index_entries * sizeof(rpmindex);
     const std::istream::pos_type store_pos = in.tellg() + store_off;
     check_magic<header_traits>(header.magic);
     std::cout << "    version: " << static_cast<unsigned int>(header.version)
-              << "\n    number of index entries: "
-              << header.num_index_entries.value()
-              << "\n    data size: " << header.data_size.value()
+              << "\n    number of index entries: " << header.num_index_entries
+              << "\n    data size: " << header.data_size
               << "\n";
-    for (unsigned int i = 0; i < header.num_index_entries.value(); i++) {
+    for (unsigned int i = 0; i < header.num_index_entries; i++) {
         std::cout << "    Index " << i << ":\n";
         inspect_index_entry(in, store_pos);
     }
-    return !in.seekg(header.data_size.value(), std::istream::cur).eof();
+    return !in.seekg(header.data_size, std::istream::cur).eof();
 }
 
 static void inspect(const char *filename)
