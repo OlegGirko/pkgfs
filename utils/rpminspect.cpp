@@ -44,8 +44,6 @@ namespace {
         boost::endian::big_uint32_t count;
     };
 
-    std::array<unsigned char, 4> rpm_magic{0xED, 0xAB, 0xEE, 0xDB};
-
     struct exception: virtual std::exception, virtual boost::exception {};
 
     template<typename T>
