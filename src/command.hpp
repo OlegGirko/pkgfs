@@ -39,17 +39,6 @@ public:
     }
 };
 
-class CommandHelp: public Command<> {
-    using options_description = boost::program_options::options_description;
-    options_description desc_;
-public:
-    CommandHelp(const options_description &desc): desc_{desc} {}
-    int run(const boost::program_options::variables_map &) const override {
-        std::cerr << desc_ << "\n";
-        return 1;
-    }
-};
-
 template <typename Derived> class Command: public Command<void> {
 private:
     using parsed_options = boost::program_options::parsed_options;
@@ -67,8 +56,6 @@ protected:
         opts.erase(opts.begin());
         auto cmd_parsed = po::command_line_parser(opts);
         po::store(cmd_parsed.options(cmd_desc).positional(cmd_pos).run(), vm);
-        if (vm.count("help"))
-            return new CommandHelp(cmd_desc);
         return new Derived();
     }
 };
